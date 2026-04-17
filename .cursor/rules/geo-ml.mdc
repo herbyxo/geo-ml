@@ -1,0 +1,179 @@
+---
+description: Domain knowledge, data sources, research, and conventions for the geo-ml mineral prospectivity mapping project
+alwaysApply: true
+---
+
+# geo-ml: Mineral Prospectivity Mapping — WA
+
+## TL;DR
+ML-based mineral prospectivity mapping for Western Australia, targeting komatiite-hosted Ni-Cu sulfide (Eastern Goldfields) and LCT pegmatite lithium (Pilbara/SW WA). Uses publicly available geophysical/geochemical grids + OZMIN deposit locations as ground truth, trained with Positive-Unlabeled (PU) bagging to avoid false-negative contamination. Industry validation path through Adrian Herbert, Glencore Kalgoorlie (Mt Keith, Cosmos, Murrin Murrin nickel belt).
+
+---
+
+## Core Mechanisms
+
+### Why ML Works Here
+Mineral deposits are surface expressions of high-dimensional subsurface processes. Traditional prospectivity mapping uses expert-weighted evidence layers — effective but subjective, slow, and inconsistent across geologists. ML replaces the subjective weighting step: given known deposit locations and multi-layer geophysical signatures, learn the mapping `f(features) → P(deposit)`. The key leverage is that geophysical data is dense (every pixel has values) while deposits are sparse (hundreds of points across millions of pixels), making this a spatial anomaly detection problem.
+
+### Nickel-Copper (Primary Target) — Geological Model
+**Host:** 2.7 Ga komatiitic ultramafic sequences, Kalgoorlie and Kurnalpi Terranes, Eastern Goldfields, Yilgarn Craton.
+**Mechanism:** High-degree partial melting of mantle produces Ni-rich komatiite magma. Magma is NOT sulfide-saturated at source — sulfides exsolve in situ through assimilation of crustal sulfur (sediments, felsic country rock) during emplacement. Sulfide liquid, being dense, pools in structural traps (embayments, fold hinges, channel-facies flows).
+**Implication for features:** Need proxies for (1) komatiite presence (magnetic highs), (2) sulfur source (felsic crust = gravity lows, high Th radiometrics), (3) structural traps (magnetic derivatives, gravity gradients), (4) alteration (K radiometrics). WA hosts ~120 sulfide Ni + 20 lateritic Ni deposits — world's 3rd largest Ni sulfide province.
+
+### Lithium (Secondary Target) — Geological Model
+**Host:** LCT (lithium-cesium-tantalum) pegmatites, spodumene-bearing. Key regions: Pilbara Craton, SW Yilgarn (Greenbushes — world's largest hard-rock Li mine).
+**ML finding:** Statistically verifiable proximity relationship between Li, Au, and Ni occurrences (Butterworth et al. 2025). Pegmatites preferentially occur along structural corridors near felsic intrusion margins.
+
+---
+
+## Current State and Evidence
+
+### What Has Been Demonstrated
+| Study | Method | Result | Significance |
+|---|---|---|---|
+| Nykänen et al. (2010) | Weights-of-Evidence + Logistic Regression, Yilgarn Ni | 81.6% of validation deposits in 9% of greenstone area | First large-scale Ni-specific MPM for Yilgarn |
+| Maepa et al. (2024) | Deep Forest, gold, Sudan | AUC 0.964, <15 training samples | Proves feasibility with sparse labels |
+| Liu et al. (2021) | Bagging-PU + Bayesian HPO | Outperforms RF on 3D mineral potential | Validates PU over standard classification |
+| Li et al. (2024) | Enhanced GAN + PU bagging, lateritic Ni-Co, Eastern Australia | Improved AUC over standard PU | GAN augmentation helps with extreme label scarcity |
+| Butterworth et al. (2025) | AI prospectivity, LCT pegmatites, WA | First regional-scale Li maps for WA; Li-Au-Ni proximity confirmed | Directly relevant to lithium target |
+| CSIRO (2022) | ML on mineral chemistry, Ni sulfide indicators | Ni-depleted olivine + low-Ru chromite as key signatures | Geochemical feature engineering targets |
+| Sun et al. (2023) | SHAP-based interpretable MPM framework | SHAP + PDP for geologist-facing output | Interpretability methodology |
+| Zhang et al. (2025) | Geospatially dissimilar negative labels | Better spatial selectivity than distance-based | Current best practice for pseudo-negative selection |
+
+### Model Performance Baseline (from literature)
+- Random Forest: AUC ~0.91–0.93
+- XGBoost: AUC ~0.91–0.94
+- Logistic Regression: AUC ~0.82 (but 81.6% deposit capture in 9% area for Ni-specific)
+- Deep Forest: AUC ~0.96 (but small sample)
+- Bagging-PU consistently outperforms standard binary classification when deposit count is low (<200 positives)
+
+---
+
+## Debates, Limitations, and Counterpoints
+
+### Known Failure Modes
+1. **Workflow-induced uncertainty (Shao et al. 2024):** Arbitrary workflow choices (feature selection, discretization, model hyperparameters) can produce high-AUC models that are not spatially selective. A model can look good on validation metrics while predicting most of the map as "prospective." Mitigation: report both AUC AND spatial selectivity (% of area classified as prospective that contains deposits).
+
+2. **Label crossover (Zhang et al. 2025):** Naive random sampling of pseudo-negatives from unlabeled data contaminates training with true positives. PU bagging mitigates but does not eliminate this. Recursive annotation methods further reduce crossover.
+
+3. **Geochemical indicators are weaker than assumed (Lesher 2004):** Ni depletion signatures don't find small high-grade ore shoots. PGE in low-sulfur rocks are poor discriminants. Crustal contamination indicators produce "many false positives and negatives." Alteration effects are "significant and may be misleading." Best lithogeochemical indicator is Ni-enriched sulfide itself — which is circular for remote prediction.
+
+4. **Structural control controversy (Swager & Griffin 1990; Connell et al. 2003):** Long-standing assumption that volcanic trough structures controlled ore shoot geometry was wrong. Ore shoots are controlled by complex structural folding and fold-thrusting. Purely volcanologic-focused features miss this — structural features (faults, fold axes) matter more than assumed.
+
+5. **Spatial autocorrelation in validation:** Random train/test splits overestimate performance because deposits cluster spatially. If you train on deposit A and test on deposit B 500m away, they share nearly identical geophysical signatures. Must use spatial cross-validation (leave-one-terrane-out or block CV).
+
+6. **Data resolution mismatch:** GA national grids are 80–400m resolution. Ore shoots can be <50m scale. The model can identify prospective corridors but cannot pinpoint drill targets. This is a district-scale tool, not a drill-hole targeting tool.
+
+### Contested Claims
+- Whether geophysical data alone (without geology maps and geochemistry) is sufficient for meaningful prospectivity prediction is debated. Most successful studies use geology maps as a primary input layer.
+- Whether PU learning genuinely outperforms well-tuned supervised methods with carefully selected negatives is not universally demonstrated — depends on deposit density and data quality.
+- Generalisability across geological provinces is unproven — models trained in one terrane may not transfer.
+
+### What We Don't Know
+- Optimal spatial resolution for ML training on komatiite-hosted systems specifically (no published benchmark)
+- Whether indicator mineral chemistry features (CSIRO work) can be encoded as grid-level features from existing geochemical survey data, or require dedicated sampling campaigns
+- How much model performance degrades when predicting blind (truly undiscovered) vs. held-out known deposits
+
+---
+
+## Data Sources
+
+### Geophysical Grids (Geoscience Australia)
+| Dataset | Resolution | Access |
+|---|---|---|
+| TMI (RTP) national | ~80m | WCS: `http://services.ga.gov.au/gis/geophysical-grids/wcs` |
+| Bouguer gravity | ~400m | Same WCS endpoint |
+| K, Th, U radiometrics | ~100m | Same WCS endpoint |
+| Total dose rate | ~100m | Same WCS endpoint |
+
+### WA Higher Resolution (GSWA / DMIRS)
+| Dataset | Resolution | Access |
+|---|---|---|
+| TMI 80m (DMIRS-067) | 80m | https://catalogue.data.wa.gov.au |
+| TMI FVD 80m (DMIRS-068) | 80m | https://catalogue.data.wa.gov.au |
+| Bouguer gravity (DMIRS-070) | 400m | https://catalogue.data.wa.gov.au |
+| MAGIX survey registry | vector | WFS + ArcGIS API |
+
+### Ground Truth
+| Dataset | Contents | Access |
+|---|---|---|
+| **OZMIN** | 1,000+ major Australian deposits, 60 commodities | https://data.gov.au/data/dataset/34247a24-d3cf-4a98-bb9d-81671ddb99de |
+| MINEDEX (WA) | WA mines + exploration licences | https://www.dmp.wa.gov.au/minedex |
+
+OZMIN key columns: `LONGITUDE`, `LATITUDE`, `COMMODITY`, `DEPOSIT_TYPE`, `STATE`, `RESOURCE_TONNES`, `GRADE`
+
+### Python Access Tools
+- **geophys_utils** (GA official): WCS/WFS helpers
+- **explore_australia** (Unearthed): https://github.com/unearthed/explore_australia — OWSLib WCS workflow
+- **minpot-toolkit** (GA): https://github.com/GeoscienceAustralia/minpot-toolkit — full MPM pipeline (archived 2025)
+- **eis_toolkit** (EU): `pip install eis-toolkit` — includes PU learning, QGIS plugin
+
+---
+
+## Practical Implications
+
+### ML Methodology: Positive-Unlabeled (PU) Learning
+**Do not use standard binary classification.** Positive labels = confirmed OZMIN deposits. No reliable negatives exist (absence of known deposit ≠ absence of mineralisation). Treating unlabeled as negative introduces massive false-negative contamination.
+
+**Bagging-PU** (Mordelet & Vert 2014): Train N classifiers, each on all positives + random unlabeled subset as pseudo-negatives. Average predictions. This hedges against label crossover.
+
+**Negative selection (current best practice):** Select pseudo-negatives from geospatially dissimilar localities, not random pixels. Increases spatial selectivity.
+
+### Model Stack
+1. **XGBoost** (primary) — best empirical AUC, handles missing values, fast
+2. **Random Forest** (baseline comparison)
+3. **LightGBM** (large grid scaling)
+
+### Interpretability Is Non-Negotiable
+Geologists reject black boxes. Always compute SHAP values. Present: mean |SHAP| bar chart, partial dependence plots for top 5 features, spatial SHAP maps where feasible. Without this, the model has no path to industry adoption.
+
+### Validation Must Be Spatial
+Use `LeaveOneGroupOut` with geological terrane as group, or spatial block cross-validation. Never random split. Report both AUC-ROC and concentration-area (C-A) plots showing what % of area is needed to capture what % of deposits.
+
+### Feature Engineering
+| Feature | Source | Geological Meaning |
+|---|---|---|
+| TMI | Magnetic grid | Komatiite/mafic body mapping |
+| FVD | TMI derivative | Shallow structure, contact mapping |
+| Analytic signal | TMI derivative | Lithological boundaries regardless of remanence |
+| Tilt angle | TMI derivative | Structural boundary mapping |
+| Bouguer anomaly | Gravity grid | Bulk crustal density, mafic/ultramafic mass |
+| Horizontal gradient magnitude | Gravity derivative | Fault zones, density contrasts |
+| K | Radiometric | Potassic alteration around Ni systems |
+| Th | Radiometric | Felsic crust (sulfur source proxy) |
+| U | Radiometric | Complementary crustal proxy |
+| K/Th ratio | Derived | Potassic alteration intensity — strong Ni indicator |
+| Th/U ratio | Derived | Metamorphic grade proxy |
+| F-parameter (K×Th/U) | Derived | Felsic contamination index — sulfur source |
+
+---
+
+## Key Takeaways
+
+1. The geological model is well-understood but has known blind spots — structural controls matter more than volcanic morphology, and geochemical indicators have higher false-positive rates than commonly assumed.
+2. PU learning is the correct framework. Standard classification will produce misleadingly high metrics but geologically nonsensical maps.
+3. Spatial validation is critical — random splits will flatter your model by 5–15 AUC points.
+4. This is a district-scale corridor identification tool, not a drill-target selector. Set stakeholder expectations accordingly.
+5. SHAP interpretability is the bridge between "interesting ML project" and "something a geologist will use."
+6. Industry validation (Adrian Herbert / Glencore) should happen after the first prospectivity map is generated — show it to a domain expert and ask "does this make geological sense?"
+
+---
+
+## Bounding Boxes (WGS84)
+
+```python
+YILGARN_BBOX    = (119.0, -33.0, 124.0, -27.0)   # Full Yilgarn Craton
+KALGOORLIE_BBOX = (120.5, -32.0, 122.5, -29.5)   # Eastern Goldfields focus
+PILBARA_BBOX    = (114.0, -24.0, 122.0, -18.0)   # Pilbara (lithium)
+```
+
+---
+
+## Code Conventions
+- All rasters in `EPSG:4326` (WGS84) for consistency; reproject to `EPSG:32750` (UTM Zone 50S) for distance-based operations
+- Raw data in `data/raw/` (gitignored); processed features in `data/processed/`
+- Notebooks numbered `01_`, `02_` etc. — one per pipeline stage
+- Core logic in `geo_ml/` package; notebooks import from package, never duplicate logic
+- Always save prospectivity output as GeoTIFF for GIS compatibility
+- SHAP importance plot required before any result is considered final
+- Report both AUC-ROC and spatial selectivity (concentration-area) for every model
